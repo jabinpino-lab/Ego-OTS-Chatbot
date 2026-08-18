@@ -1,12 +1,16 @@
-const DOC_URL = 'https://docs.google.com/document/d/e/2PACX-1vQ1DmC2uLSCJNeF09RqfZ2Qxok-ksDUomACwpGcZE-mt6dqdyrOXvNzV2d1vNwUh8cpPsO5aGQZvisL/pub';
+const GOOGLE_DOC_URL = 'https://docs.google.com/document/d/e/2PACX-1vQ1DmC2uLSCJNeF09RqfZ2Qxok-ksDUomACwpGcZE-mt6dqdyrOXvNzV2d1vNwUh8cpPsO5aGQZvisL/pub';
+const DOC_PROXY_URL = `https://r.jina.ai/http://${GOOGLE_DOC_URL.replace(/^https?:\/\//, '')}`;
 
 async function loadSource() {
-  const response = await fetch(DOC_URL, {
-    redirect: 'follow',
-    headers: { 'User-Agent': 'EGO-OTS-Chatbot/1.0' }
+  // Google Docs can return malformed redirect/header data to serverless fetch clients.
+  // Jina Reader converts the public published document into clean text/Markdown.
+  const response = await fetch(DOC_PROXY_URL, {
+    method: 'GET',
+    headers: { 'Accept': 'text/plain' },
+    cache: 'no-store'
   });
   if (!response.ok) {
-    throw new Error(`Unable to read the published EGO OTS Google Doc (${response.status}).`);
+    throw new Error(`Unable to read the published EGO OTS Google Doc through the document reader (${response.status}).`);
   }
   const text = await response.text();
   if (!text.trim()) throw new Error('The published EGO OTS Google Doc returned empty content.');

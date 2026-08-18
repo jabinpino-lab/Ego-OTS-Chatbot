@@ -1,27 +1,28 @@
-const GOOGLE_DOC_URL = 'https://docs.google.com/document/d/e/2PACX-1vQ1DmC2uLSCJNeF09RqfZ2Qxok-ksDUomACwpGcZE-mt6dqdyrOXvNzV2d1vNwUh8cpPsO5aGQZvisL/pub';
-const DOC_PROXY_URL = `https://r.jina.ai/http://${GOOGLE_DOC_URL.replace(/^https?:\/\//, '')}`;
+const DOC_URL = 'https://docs.google.com/document/d/e/2PACX-1vQ1DmC2uLSCJNeF09RqfZ2Qxok-ksDUomACwpGcZE-mt6dqdyrOXvNzV2d1vNwUh8cpPsO5aGQZvisL/pub';
 
 async function loadSource() {
-  // Google Docs can return malformed redirect/header data to serverless fetch clients.
-  // Jina Reader converts the public published document into clean text/Markdown.
-  const response = await fetch(DOC_PROXY_URL, {
-    method: 'GET',
-    headers: { 'Accept': 'text/plain' },
-    cache: 'no-store'
-  });
-  if (!response.ok) {
-    throw new Error(`Unable to read the published EGO OTS Google Doc through the document reader (${response.status}).`);
-  }
+  const response = await fetch(DOC_URL, { redirect: 'follow' });
+  if (!response.ok) throw new Error(`Unable to read the published EGO OTS Google Doc (${response.status}).`);
   const text = await response.text();
   if (!text.trim()) throw new Error('The published EGO OTS Google Doc returned empty content.');
   return text.slice(0, 120000);
 }
 
+function getGeminiKey() {
+  // Vercel can preserve pasted credential metadata/newlines. The Gemini API
+  // header must contain only the API-key token, so use the first whitespace-
+  // separated token and reject an obviously missing value.
+  const raw = String(process.env.GEMINI_API_KEY || '').trim();
+  const key = raw.split(/\s+/)[0];
+  if (!key) throw new Error('GEMINI_API_KEY is not configured in Vercel.');
+  return key;
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
-  if (!process.env.GEMINI_API_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY is not configured in Vercel.' });
 
   try {
+    const apiKey = getGeminiKey();
     const source = await loadSource();
     const { messages = [] } = req.body || {};
     const safeMessages = Array.isArray(messages)
@@ -39,7 +40,7 @@ export default async function handler(req, res) {
 
     const response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       body: JSON.stringify({ systemInstruction: { parts: [{ text: system }] }, contents: safeMessages, generationConfig: { maxOutputTokens: 1200, temperature: 0.15 } })
     });
     const data = await response.json();

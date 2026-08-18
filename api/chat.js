@@ -1,8 +1,8 @@
 const DOC_URL = 'https://docs.google.com/document/d/e/2PACX-1vQ1DmC2uLSCJNeF09RqfZ2Qxok-ksDUomACwpGcZE-mt6dqdyrOXvNzV2d1vNwUh8cpPsO5aGQZvisL/pub';
 const SOURCE_CACHE_MS = 10 * 60 * 1000;
 const REQUEST_WINDOW_MS = 60 * 1000;
-const MAX_REQUESTS_PER_WINDOW = 3;
-const MIN_REQUEST_GAP_MS = 8 * 1000;
+const MAX_REQUESTS_PER_WINDOW = 10;
+const MIN_REQUEST_GAP_MS = 1000;
 
 let sourceCache = { text: '', expiresAt: 0 };
 const requestBuckets = new Map();
@@ -37,8 +37,8 @@ function checkRateLimit(clientId) {
   const now = Date.now();
   const bucket = requestBuckets.get(clientId) || { timestamps: [], lastRequest: 0 };
   bucket.timestamps = bucket.timestamps.filter(t => now - t < REQUEST_WINDOW_MS);
-  if (now - bucket.lastRequest < MIN_REQUEST_GAP_MS) return { ok: false, retryAfter: Math.ceil((MIN_REQUEST_GAP_MS - (now - bucket.lastRequest)) / 1000), message: 'Please wait a few seconds before sending another OTS question.' };
-  if (bucket.timestamps.length >= MAX_REQUESTS_PER_WINDOW) return { ok: false, retryAfter: Math.ceil((REQUEST_WINDOW_MS - (now - bucket.timestamps[0])) / 1000), message: 'You have reached the short-term OTS request limit. Please wait a moment before trying again.' };
+  if (now - bucket.lastRequest < MIN_REQUEST_GAP_MS) return { ok: false, retryAfter: 1, message: 'Please wait about one second before sending another OTS question.' };
+  if (bucket.timestamps.length >= MAX_REQUESTS_PER_WINDOW) return { ok: false, retryAfter: Math.max(1, Math.ceil((REQUEST_WINDOW_MS - (now - bucket.timestamps[0])) / 1000)), message: 'You have reached the short-term OTS request limit. Please wait a moment before trying again.' };
   bucket.timestamps.push(now); bucket.lastRequest = now; requestBuckets.set(clientId, bucket);
   return { ok: true };
 }
